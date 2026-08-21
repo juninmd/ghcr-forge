@@ -1,0 +1,23 @@
+[
+  {
+    "name": "cluster-pulse",
+    "repo": "juninmd/cluster-pulse",
+    "image": "ghcr.io/juninmd/cluster-pulse",
+    "branch": "main"
+  },
+  {
+    "name": "mesa-qr",
+    "repo": "juninmd/mesa-qr",
+    "image": "ghcr.io/juninmd/mesa-qr",
+    "branch": "main",
+    "dockerfile": "Dockerfile",
+    "context": ".",
+    "buildArgs": { "NODE_ENV": "production" },
+    "chart": {
+      "repo": "juninmd/app-charts",
+      "path": "charts/mesa-qr/values.yaml",
+      "key": "image.tag",
+      "branch": "main"
+    }
+  }
+]

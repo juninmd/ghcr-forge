@@ -1,0 +1,20 @@
+{
+  "name": "ghcr-forge",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "CI self-hosted: webhook do GitHub → docker build → GHCR → bump de tag no repo de charts. Sem GitHub Actions.",
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "dev": "bun --watch src/index.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "hono": "^4.6.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.0",
+    "typescript": "^5.7.3"
+  }
+}
