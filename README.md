@@ -136,11 +136,28 @@ antes do push, chart que já está na tag certa (não commita), chave inexistent
 A camada HTTP foi validada também contra o servidor de verdade (assinatura inválida → 401,
 assinatura válida → job enfileirado, repetição → dedupe, `/api` sem token → 401).
 
-## O que ainda não foi exercitado contra o mundo real
+## Build real
 
-`docker build`/`docker push` no GHCR e o commit no `app-charts` rodaram apenas contra o runner
-falso — validar de ponta a ponta significa publicar uma imagem de verdade na conta. O primeiro
-build real é o teste que falta.
+O forge já se construiu (dogfooding). `POST /api/build {"repo":"ghcr-forge"}`, 26s:
+
+```
+$ docker login ghcr.io -u juninmd --password ***
+$ git clone https://github.com/juninmd/ghcr-forge.git data/work/ghcr-forge
+$ git remote set-url origin ***
+$ git checkout --force origin/main
+$ git rev-parse HEAD
+# juninmd/ghcr-forge@dff84df59e8b -> ghcr.io/juninmd/ghcr-forge:sha-dff84df59e8b
+$ docker build ... $ docker push (tag imutável + latest)
+```
+
+Conferido depois: o pacote existe no GHCR como **privado** com as duas tags, `docker pull` da
+tag imutável traz a imagem, e o container resultante sobe e responde `/health`. O token não
+aparece em lugar nenhum do log do job.
+
+**O que ainda não rodou contra o mundo real:** o bump no `app-charts`. Ele é testado contra o
+runner falso (inclusive o caso de não commitar quando a tag já está certa e o de falhar alto
+quando a chave não existe), mas o primeiro commit de verdade em um repo de GitOps de produção
+é uma decisão consciente, não um efeito colateral de smoke test.
 
 ## Limitações conhecidas
 
