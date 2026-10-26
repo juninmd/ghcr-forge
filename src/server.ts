@@ -83,7 +83,10 @@ export function createServer(deps: ServerDeps): Hono {
     ),
   );
 
-  app.get("/api/jobs", (c) => c.json(queue.list(Number(c.req.query("limit") ?? 30))));
+  app.get("/api/jobs", (c) => {
+    const n = Math.trunc(Number(c.req.query("limit") ?? 30));
+    return c.json(queue.list(Number.isFinite(n) ? Math.min(Math.max(n, 1), 200) : 30));
+  });
 
   app.get("/api/jobs/:id", (c) => {
     const job = queue.get(c.req.param("id"));

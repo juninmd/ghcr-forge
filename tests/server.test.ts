@@ -148,6 +148,18 @@ describe("/api", () => {
     queue.close();
   });
 
+  test("limit invalido nao devolve a tabela inteira", async () => {
+    const { server, queue } = app();
+    for (let i = 0; i < 3; i++)
+      queue.enqueue({ repo: "app", sha: String(i).repeat(40), ref: "refs/heads/main", trigger: "manual" });
+    const get = async (q: string) =>
+      (await (await server.request(new Request(`http://x/api/jobs${q}`, { headers: auth }))).json()) as unknown[];
+    expect(await get("?limit=-1")).toHaveLength(1);
+    expect(await get("?limit=2")).toHaveLength(2);
+    expect(await get("?limit=abc")).toHaveLength(3);
+    queue.close();
+  });
+
   test("build manual enfileira", async () => {
     const { server, queue } = app();
     const res = await server.request(
