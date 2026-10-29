@@ -94,7 +94,7 @@ Tudo em `/api/*` exige `Authorization: Bearer $API_TOKEN`.
 | `GET /` | dashboard read-only da fila |
 | `POST /hooks/github` | webhook (HMAC sha256 obrigatório) |
 | `GET /api/repos` | catálogo carregado |
-| `GET /api/jobs?limit=30` | histórico |
+| `GET /api/jobs?limit=30` | histórico (limit entre 1 e 200; inválido cai em 30) |
 | `GET /api/jobs/:id` | um job |
 | `GET /api/jobs/:id/log` | log completo do build, já sem credenciais |
 | `POST /api/build` | dispara na mão: `{"repo":"mesa-qr"}` (ou `{"repo":"...","sha":"..."}`) |
