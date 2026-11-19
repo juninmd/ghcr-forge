@@ -22,8 +22,16 @@ export interface Worker {
 }
 
 export function createWorker(deps: WorkerDeps): Worker {
-  const { config, queue, notify } = deps;
+  const { config, queue } = deps;
   const log = deps.log ?? console.log;
+  // Falha do Telegram nunca pode reescrever o resultado de um build já concluído.
+  const notify: Notify = async (text) => {
+    try {
+      await deps.notify(text);
+    } catch (err) {
+      log(`[worker] notificação falhou: ${(err as Error).message ?? err}`);
+    }
+  };
   const now = deps.now ?? (() => new Date());
   let timer: ReturnType<typeof setTimeout> | null = null;
   let stopped = false;
