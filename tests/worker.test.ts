@@ -11,7 +11,7 @@ const repos: RepoConfig[] = parseRepos([
   { name: "app", repo: "juninmd/app", image: "ghcr.io/juninmd/app" },
 ]);
 
-function setup(fail?: (cmd: string[]) => RunResult | undefined) {
+function setup(fail?: (cmd: string[]) => RunResult | undefined, notifyImpl?: (t: string) => Promise<void>) {
   const queue = createQueue(":memory:");
   const notified: string[] = [];
   const logs: string[] = [];
@@ -32,9 +32,11 @@ function setup(fail?: (cmd: string[]) => RunResult | undefined) {
     queue,
     repos: () => repos,
     io,
-    notify: async (t) => {
-      notified.push(t);
-    },
+    notify:
+      notifyImpl ??
+      (async (t) => {
+        notified.push(t);
+      }),
     log: () => {},
   });
   return { queue, worker, notified, logs };
@@ -116,6 +118,39 @@ describe("worker", () => {
     await worker.tick();
     expect(queue.get(a.id)?.status).toBe("failed");
     expect(queue.get(b.id)?.status).toBe("success");
+    queue.close();
+  });
+
+  test("Telegram fora do ar não reescreve um build bem-sucedido como failed", async () => {
+    const { worker, queue } = setup(undefined, async () => {
+      throw new Error("fetch failed");
+    });
+    const job = queue.enqueue({
+      repo: "app",
+      sha: "b".repeat(40),
+      ref: "refs/heads/main",
+      trigger: "webhook",
+    });
+    await worker.tick();
+    expect(queue.get(job.id)?.status).toBe("success");
+    queue.close();
+  });
+
+  test("Telegram fora do ar não derruba o tick de um build falho", async () => {
+    const { worker, queue } = setup(
+      (cmd) => (cmd[1] === "build" ? { code: 1, stdout: "", stderr: "boom" } : undefined),
+      async () => {
+        throw new Error("fetch failed");
+      },
+    );
+    const job = queue.enqueue({
+      repo: "app",
+      sha: "b".repeat(40),
+      ref: "refs/heads/main",
+      trigger: "webhook",
+    });
+    await expect(worker.tick()).resolves.toBe(true);
+    expect(queue.get(job.id)?.error).toContain("boom");
     queue.close();
   });
 
