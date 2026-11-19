@@ -174,6 +174,53 @@ describe("/api", () => {
     queue.close();
   });
 
+  test.each([
+    ["sha parecido com opção do git", { repo: "app", sha: "--orphan=x" }],
+    ["sha que não é string", { repo: "app", sha: 123 }],
+    ["sha com ref arbitrário", { repo: "app", sha: "origin/main" }],
+  ])("build manual rejeita %s com 400 e não enfileira", async (_name, payload) => {
+    const { server, queue } = app();
+    const res = await server.request(
+      new Request("http://x/api/build", {
+        method: "POST",
+        headers: { ...auth, "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(queue.list(10)).toHaveLength(0);
+    queue.close();
+  });
+
+  test("build manual aceita SHA hexadecimal explícito", async () => {
+    const { server, queue } = app();
+    const res = await server.request(
+      new Request("http://x/api/build", {
+        method: "POST",
+        headers: { ...auth, "content-type": "application/json" },
+        body: JSON.stringify({ repo: "app", sha: "abc1234" }),
+      }),
+    );
+    expect(res.status).toBe(202);
+    expect(queue.list(10)[0]?.sha).toBe("abc1234");
+    queue.close();
+  });
+
+  test("corpo JSON nulo ou repo não-string é 400, não 500", async () => {
+    const { server, queue } = app();
+    for (const body of ["null", JSON.stringify({ repo: ["app"] })]) {
+      const res = await server.request(
+        new Request("http://x/api/build", {
+          method: "POST",
+          headers: { ...auth, "content-type": "application/json" },
+          body,
+        }),
+      );
+      expect(res.status).toBe(400);
+    }
+    queue.close();
+  });
+
   test("build manual de repo desconhecido é 404", async () => {
     const { server, queue } = app();
     const res = await server.request(

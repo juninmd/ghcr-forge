@@ -1,5 +1,12 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
+/** Comparação em tempo constante; tamanhos diferentes são recusados antes (timingSafeEqual exige o mesmo tamanho). */
+export function safeEqual(a: string, b: string): boolean {
+  const x = Buffer.from(a);
+  const y = Buffer.from(b);
+  return x.length === y.length && timingSafeEqual(x, y);
+}
+
 /**
  * Verifica o header X-Hub-Signature-256 do GitHub.
  * Comparação em tempo constante: assinatura errada não pode vazar por timing.
@@ -7,11 +14,11 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 export function verifySignature(body: string, header: string | null, secret: string): boolean {
   if (!secret || !header) return false;
   const expected = `sha256=${createHmac("sha256", secret).update(body).digest("hex")}`;
-  const a = Buffer.from(expected);
-  const b = Buffer.from(header);
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(a, b);
+  return safeEqual(expected, header);
 }
+
+/** SHA completo ou abreviado. Barra valores que o git leria como opção (`--orphan`) ou ref arbitrário. */
+export const COMMIT_SHA = /^[0-9a-f]{7,40}$/i;
 
 export interface PushEvent {
   repo: string;
@@ -44,6 +51,7 @@ export function parsePushEvent(payload: unknown): PushEvent | null {
   // Push de tag não dispara build: o gatilho é branch.
   if (!ref.startsWith("refs/heads/")) return null;
   if (p.deleted || sha === ZERO_SHA) return null;
+  if (!COMMIT_SHA.test(sha)) return null;
   return {
     repo,
     ref,
