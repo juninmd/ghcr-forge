@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { parsePushEvent, verifySignature } from "./github.ts";
+import { COMMIT_SHA, parsePushEvent, safeEqual, verifySignature } from "./github.ts";
 import { dashboard } from "./dashboard.ts";
 import type { Config, JobQueue, RepoConfig } from "./types.ts";
 
@@ -65,7 +65,7 @@ export function createServer(deps: ServerDeps): Hono {
   app.use("/api/*", async (c, next) => {
     const auth = c.req.header("authorization") ?? "";
     const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-    if (!config.apiToken || token !== config.apiToken) {
+    if (!config.apiToken || !safeEqual(token, config.apiToken)) {
       return c.json({ error: "não autorizado" }, 401);
     }
     await next();
@@ -101,8 +101,14 @@ export function createServer(deps: ServerDeps): Hono {
   });
 
   app.post("/api/build", async (c) => {
-    const body = (await c.req.json().catch(() => ({}))) as { repo?: string; sha?: string };
-    if (!body.repo) return c.json({ error: 'campo "repo" é obrigatório' }, 400);
+    const body = ((await c.req.json().catch(() => null)) ?? {}) as { repo?: unknown; sha?: unknown };
+    if (typeof body.repo !== "string" || !body.repo) {
+      return c.json({ error: 'campo "repo" é obrigatório' }, 400);
+    }
+    // O SHA vai direto para `git checkout --force`: só aceita hex, nunca algo que pareça opção.
+    if (body.sha !== undefined && (typeof body.sha !== "string" || !COMMIT_SHA.test(body.sha))) {
+      return c.json({ error: 'campo "sha" deve ser um commit hexadecimal (7 a 40 caracteres)' }, 400);
+    }
 
     const repo = deps.repos().find((r) => r.name === body.repo || r.repo === body.repo);
     if (!repo) return c.json({ error: `repo "${body.repo}" não catalogado` }, 404);

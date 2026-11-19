@@ -55,6 +55,7 @@ describe("parsePushEvent", () => {
   test("ignora deleção de branch", () => {
     expect(parsePushEvent({ ...base, deleted: true })).toBeNull();
     expect(parsePushEvent({ ...base, after: "0".repeat(40) })).toBeNull();
+    expect(parsePushEvent({ ...base, after: "--orphan=x" })).toBeNull();
   });
 
   test("ignora payload incompleto", () => {

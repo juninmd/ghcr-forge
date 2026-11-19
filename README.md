@@ -107,7 +107,9 @@ curl -XPOST localhost:8080/api/build \
 ```
 
 Sem `sha`, constrói o topo da branch — e a tag sai do commit **realmente conferido**,
-nunca do que o gatilho disse.
+nunca do que o gatilho disse. Quando informado, `sha` precisa ser hexadecimal (7 a 40
+caracteres): ele vai para `git checkout`, então nada que pareça opção ou ref arbitrário é aceito
+(400). O token da API é comparado em tempo constante, como a assinatura do webhook.
 
 ## Decisões de segurança
 
