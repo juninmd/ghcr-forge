@@ -221,6 +221,45 @@ describe("/api", () => {
     queue.close();
   });
 
+  test("build manual repetido do mesmo alvo com job pendente não duplica a fila", async () => {
+    const { server, queue } = app();
+    const send = (body: Record<string, unknown>) =>
+      server.request(
+        new Request("http://x/api/build", {
+          method: "POST",
+          headers: { ...auth, "content-type": "application/json" },
+          body: JSON.stringify(body),
+        }),
+      );
+    const first = await send({ repo: "app" });
+    const again = await send({ repo: "app" });
+    expect(first.status).toBe(202);
+    expect(again.status).toBe(200);
+    const firstJob = ((await first.json()) as { job: string }).job;
+    expect(await again.json()).toMatchObject({ ok: true, job: firstJob, deduped: true });
+    // SHA diferente é outro build.
+    expect((await send({ repo: "app", sha: "abc1234" })).status).toBe(202);
+    expect(queue.list(10)).toHaveLength(2);
+    queue.close();
+  });
+
+  test("topo da branch já em build enfileira de novo (pode haver commit mais novo)", async () => {
+    const { server, queue } = app();
+    const send = () =>
+      server.request(
+        new Request("http://x/api/build", {
+          method: "POST",
+          headers: { ...auth, "content-type": "application/json" },
+          body: JSON.stringify({ repo: "app" }),
+        }),
+      );
+    expect((await send()).status).toBe(202);
+    queue.claimNext();
+    expect((await send()).status).toBe(202);
+    expect(queue.list(10)).toHaveLength(2);
+    queue.close();
+  });
+
   test("build manual de repo desconhecido é 404", async () => {
     const { server, queue } = app();
     const res = await server.request(

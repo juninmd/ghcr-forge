@@ -115,6 +115,12 @@ export function createServer(deps: ServerDeps): Hono {
 
     // Sem SHA explícito, o worker resolve o topo da branch no checkout.
     const sha = body.sha ?? `origin/${repo.branch ?? "main"}`;
+    // Clique repetido (ou retry do cliente) com o mesmo alvo ainda na fila não constrói duas vezes.
+    // Topo da branch já em build pode estar velho: esse caso ainda enfileira.
+    const pending = queue.findPending(repo.name, sha);
+    if (pending && (body.sha !== undefined || pending.status === "queued")) {
+      return c.json({ ok: true, job: pending.id, deduped: true });
+    }
     const job = queue.enqueue({
       repo: repo.name,
       sha,
