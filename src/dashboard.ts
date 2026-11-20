@@ -32,7 +32,7 @@ export function dashboard(repos: RepoConfig[], jobs: Job[]): string {
       <td class="dim">${esc(j.trigger)}</td>
       <td class="dim">${duration(j)}</td>
       <td class="dim">${esc(j.created_at.replace("T", " ").slice(0, 19))}</td>
-      <td class="err">${esc((j.error ?? "").slice(0, 90))}</td>
+      <td class="err"${j.error ? ` title="${esc(j.error)}"` : ""}>${esc((j.error ?? "").slice(0, 90))}</td>
     </tr>`,
     )
     .join("");
@@ -58,13 +58,16 @@ export function dashboard(repos: RepoConfig[], jobs: Job[]): string {
   h2 { font-size:.8rem; text-transform:uppercase; letter-spacing:.08em; color:#7d8590; margin:2rem 0 .5rem; }
   table { width:100%; border-collapse:collapse; }
   th { text-align:left; font-size:.7rem; text-transform:uppercase; letter-spacing:.06em; color:#7d8590; padding:.4rem .5rem; border-bottom:1px solid #21262d; }
-  td { padding:.4rem .5rem; border-bottom:1px solid #161b22; vertical-align:top; }
+  td { padding:.4rem .5rem; border-bottom:1px solid #161b22; vertical-align:top; white-space:nowrap; }
+  /* Tabela larga rola dentro do próprio bloco; a página não ganha rolagem lateral no celular. */
+  .table-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  td.err { white-space:normal; min-width:16rem; }
   .mono { font-family:ui-monospace,SFMono-Regular,monospace; }
   .dim { color:#7d8590; }
   .err { color:#f85149; font-size:.8rem; }
   .dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:.5rem; }
   ul { list-style:none; padding:0; margin:0; }
-  li { padding:.2rem 0; }
+  li { padding:.2rem 0; overflow-wrap:anywhere; }
   .empty { color:#7d8590; padding:1rem 0; }
 </style></head>
 <body><main>
@@ -73,7 +76,7 @@ export function dashboard(repos: RepoConfig[], jobs: Job[]): string {
   <h2>fila (${jobs.length})</h2>
   ${
     jobs.length
-      ? `<table><thead><tr><th>status</th><th>repo</th><th>tag/sha</th><th>gatilho</th><th>duração</th><th>criado</th><th>erro</th></tr></thead><tbody>${rows}</tbody></table>`
+      ? `<div class="table-wrap" role="region" aria-label="fila de builds" tabindex="0"><table><thead><tr><th scope="col">status</th><th scope="col">repo</th><th scope="col">tag/sha</th><th scope="col">gatilho</th><th scope="col">duração</th><th scope="col">criado</th><th scope="col">erro</th></tr></thead><tbody>${rows}</tbody></table></div>`
       : '<p class="empty">nenhum build ainda</p>'
   }
   <h2>catálogo (${repos.length})</h2>
