@@ -13,66 +13,56 @@ export function quoteScalar(value: string): string {
   return JSON.stringify(value);
 }
 
+/**
+ * Acha a linha da chave `path`. Em cada nível só vale um filho direto do
+ * ancestral (a indentação do primeiro filho do bloco): `backend.image.tag` não
+ * pode casar com `backend.sidecar.image.tag`, que está mais fundo.
+ */
+function findKey(lines: string[], path: string[]): { index: number; match: RegExpExecArray } | null {
+  // Para cada nível já casado: indentação da chave e indentação dos seus filhos diretos.
+  const ancestors: { indent: number; child: number | null }[] = [];
+  let root: number | null = null;
+
+  for (let i = 0; i < lines.length; i++) {
+    const m = KEY_LINE.exec(lines[i] ?? "");
+    if (!m) continue;
+    const indent = (m[1] ?? "").length;
+
+    // Recuou até o nível de um ancestral: saímos do bloco dele.
+    while (ancestors.length && indent <= (ancestors.at(-1)?.indent ?? -1)) ancestors.pop();
+
+    const parent = ancestors.at(-1);
+    if (parent) {
+      parent.child ??= indent;
+      if (indent !== parent.child) continue;
+    } else {
+      root ??= indent;
+      if (indent !== root) continue;
+    }
+
+    if ((m[2] ?? "") !== path[ancestors.length]) continue;
+    if (ancestors.length === path.length - 1) return { index: i, match: m };
+    ancestors.push({ indent, child: null });
+  }
+  return null;
+}
+
 export function setYamlValue(yaml: string, path: string[], value: string): string {
   if (!path.length) throw new Error("caminho vazio");
   const lines = yaml.split("\n");
-  const ancestors: number[] = [];
-  let depth = 0;
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i] ?? "";
-    const m = KEY_LINE.exec(line);
-    if (!m) continue;
-    const indent = (m[1] ?? "").length;
-    const key = m[2] ?? "";
-
-    // Recuou até o nível de um ancestral: saímos do bloco dele.
-    while (depth > 0 && indent <= (ancestors[depth - 1] ?? -1)) {
-      ancestors.pop();
-      depth--;
-    }
-
-    if (key !== path[depth]) continue;
-
-    if (depth === path.length - 1) {
-      const trailing = /(\s+#.*)$/.exec(m[3] ?? "")?.[1] ?? "";
-      lines[i] = `${m[1]}${key}: ${quoteScalar(value)}${trailing}`;
-      return lines.join("\n");
-    }
-
-    ancestors.push(indent);
-    depth++;
-  }
-
-  throw new Error(`chave "${path.join(".")}" não encontrada no values.yaml`);
+  const found = findKey(lines, path);
+  if (!found) throw new Error(`chave "${path.join(".")}" não encontrada no values.yaml`);
+  const { index, match: m } = found;
+  const trailing = /(\s+#.*)$/.exec(m[3] ?? "")?.[1] ?? "";
+  lines[index] = `${m[1]}${m[2]}: ${quoteScalar(value)}${trailing}`;
+  return lines.join("\n");
 }
 
 /** Lê o valor atual de uma chave — usado para não commitar quando nada mudou. */
 export function getYamlValue(yaml: string, path: string[]): string | null {
-  const lines = yaml.split("\n");
-  const ancestors: number[] = [];
-  let depth = 0;
-
-  for (const line of lines) {
-    const m = KEY_LINE.exec(line);
-    if (!m) continue;
-    const indent = (m[1] ?? "").length;
-    const key = m[2] ?? "";
-
-    while (depth > 0 && indent <= (ancestors[depth - 1] ?? -1)) {
-      ancestors.pop();
-      depth--;
-    }
-
-    if (key !== path[depth]) continue;
-
-    if (depth === path.length - 1) {
-      const raw = (m[3] ?? "").replace(/\s+#.*$/, "").trim();
-      return raw.replace(/^["']|["']$/g, "");
-    }
-
-    ancestors.push(indent);
-    depth++;
-  }
-  return null;
+  if (!path.length) return null;
+  const found = findKey(yaml.split("\n"), path);
+  if (!found) return null;
+  const raw = (found.match[3] ?? "").replace(/\s+#.*$/, "").trim();
+  return raw.replace(/^["']|["']$/g, "");
 }
