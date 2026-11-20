@@ -89,3 +89,35 @@ describe("getYamlValue", () => {
     expect(getYamlValue(out, ["image", "tag"])).toBe("sha-deadbeef1234");
   });
 });
+
+describe("só filhos diretos casam com o caminho", () => {
+  const values = [
+    "backend:",
+    "  sidecar:",
+    "    image:",
+    '      tag: "sidecar-1"',
+    "  image:",
+    '    tag: "app-1"',
+  ].join("\n");
+
+  test("setYamlValue não altera a chave homônima de um neto", () => {
+    const out = setYamlValue(values, ["backend", "image", "tag"], "app-2");
+    expect(out).toContain('      tag: "sidecar-1"');
+    expect(out).toContain('    tag: "app-2"');
+  });
+
+  test("getYamlValue lê a chave do nível certo", () => {
+    expect(getYamlValue(values, ["backend", "image", "tag"])).toBe("app-1");
+  });
+
+  test("chave que só existe mais funda não conta como encontrada", () => {
+    expect(getYamlValue("a:\n  b:\n    c: 1\n", ["a", "c"])).toBeNull();
+    expect(() => setYamlValue("a:\n  b:\n    c: 1\n", ["a", "c"], "2")).toThrow();
+  });
+});
+
+test("no nível raiz, chave aninhada em outro bloco não casa", () => {
+  const yaml = 'backend:\n  image:\n    tag: "b"\nimage:\n  tag: "root"\n';
+  expect(getYamlValue(yaml, ["image", "tag"])).toBe("root");
+  expect(setYamlValue(yaml, ["image", "tag"], "new")).toBe('backend:\n  image:\n    tag: "b"\nimage:\n  tag: "new"\n');
+});
