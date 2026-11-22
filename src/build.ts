@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { cloneUrl, tagForSha } from "./github.ts";
+import { cloneUrl, gitAuthEnv, tagForSha } from "./github.ts";
 import { redact } from "./runner.ts";
 import type { Config, Job, RepoConfig, Runner } from "./types.ts";
 import { getYamlValue, setYamlValue } from "./yaml.ts";
@@ -33,11 +33,11 @@ async function exec(
   secrets: string[],
   step: string,
   cmd: string[],
-  opts: { cwd?: string; display?: string } = {},
+  opts: { cwd?: string; display?: string; env?: Record<string, string>; stdin?: string } = {},
 ): Promise<string> {
   const shown = opts.display ?? cmd.join(" ");
   io.log(`$ ${redact(shown, secrets)}`);
-  const res = await io.runner(cmd, { cwd: opts.cwd });
+  const res = await io.runner(cmd, { cwd: opts.cwd, env: opts.env, stdin: opts.stdin });
   const out = redact(`${res.stdout}${res.stderr}`, secrets).trimEnd();
   if (out) io.log(out);
   if (res.code !== 0) {
@@ -47,14 +47,14 @@ async function exec(
   return res.stdout;
 }
 
-/** Login no registry. Senha via stdin seria melhor, mas `docker login` já mascara o valor. */
+/** Login no registry com a senha pelo stdin: no argv ela ficaria visível em `ps` e /proc/<pid>/cmdline. */
 export async function registryLogin(config: Config, io: BuildIO): Promise<void> {
   await exec(
     io,
     [config.githubToken],
     "login",
-    ["docker", "login", config.registry, "-u", config.githubUser, "--password", config.githubToken],
-    { display: `docker login ${config.registry} -u ${config.githubUser} --password ***` },
+    ["docker", "login", config.registry, "-u", config.githubUser, "--password-stdin"],
+    { stdin: config.githubToken },
   );
 }
 
@@ -67,20 +67,15 @@ async function syncRepo(
   ref: string,
   token: string,
 ): Promise<void> {
-  const url = cloneUrl(repo, token);
-  const safe = `https://github.com/${repo}.git`;
+  const url = cloneUrl(repo);
+  const env = gitAuthEnv(token);
   // Checamos .git/HEAD (arquivo) e não .git (diretório): Bun.file().exists() só vê arquivo.
   if (!(await io.exists(join(dir, ".git", "HEAD")))) {
-    await exec(io, secrets, "clone", ["git", "clone", url, dir], {
-      display: `git clone ${safe} ${dir}`,
-    });
+    await exec(io, secrets, "clone", ["git", "clone", url, dir], { env });
   }
-  // A URL é regravada a cada build: token rotacionado não deixa o repo preso no antigo.
-  await exec(io, secrets, "remote", ["git", "remote", "set-url", "origin", url], {
-    cwd: dir,
-    display: "git remote set-url origin ***",
-  });
-  await exec(io, secrets, "fetch", ["git", "fetch", "--prune", "origin"], { cwd: dir });
+  // Regravada a cada build: apaga o token que versões antigas deixavam na URL do .git/config.
+  await exec(io, secrets, "remote", ["git", "remote", "set-url", "origin", url], { cwd: dir });
+  await exec(io, secrets, "fetch", ["git", "fetch", "--prune", "origin"], { cwd: dir, env });
   await exec(io, secrets, "checkout", ["git", "checkout", "--force", ref], { cwd: dir });
   await exec(io, secrets, "clean", ["git", "clean", "-fdx"], { cwd: dir });
 }
@@ -184,6 +179,9 @@ export async function bumpChart(
     ],
     { cwd: dir },
   );
-  await exec(io, secrets, "chart-push", ["git", "push", "origin", branch], { cwd: dir });
+  await exec(io, secrets, "chart-push", ["git", "push", "origin", branch], {
+    cwd: dir,
+    env: gitAuthEnv(config.githubToken),
+  });
   return true;
 }

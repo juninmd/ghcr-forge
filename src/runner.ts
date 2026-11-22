@@ -6,6 +6,7 @@ export function createRunner(timeoutMs: number): Runner {
     const proc = Bun.spawn(cmd, {
       cwd: opts.cwd,
       env: { ...process.env, ...opts.env, GIT_TERMINAL_PROMPT: "0" },
+      stdin: opts.stdin === undefined ? "ignore" : new TextEncoder().encode(opts.stdin),
       stdout: "pipe",
       stderr: "pipe",
     });
