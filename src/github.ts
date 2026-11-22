@@ -69,6 +69,19 @@ export function tagForSha(sha: string): string {
 }
 
 /** URL de clone com credencial embutida. NUNCA logar o retorno desta função. */
-export function cloneUrl(repo: string, token: string): string {
-  return `https://x-access-token:${token}@github.com/${repo}.git`;
+export function cloneUrl(repo: string): string {
+  return `https://github.com/${repo}.git`;
+}
+
+/**
+ * Credencial do git via env (GIT_CONFIG_*): não aparece no argv (visível em `ps`)
+ * nem fica gravada no .git/config do workspace, como acontecia com o token na URL.
+ */
+export function gitAuthEnv(token: string): Record<string, string> {
+  const basic = Buffer.from(`x-access-token:${token}`).toString("base64");
+  return {
+    GIT_CONFIG_COUNT: "1",
+    GIT_CONFIG_KEY_0: "http.https://github.com/.extraheader",
+    GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${basic}`,
+  };
 }

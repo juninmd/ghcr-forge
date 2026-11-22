@@ -58,6 +58,8 @@ export interface RunOptions {
   env?: Record<string, string>;
   /** o que aparece no log no lugar do comando real (esconde credenciais) */
   display?: string;
+  /** enviado ao stdin do processo (credencial fora da linha de comando, que `ps` mostra a todos) */
+  stdin?: string;
 }
 
 /** Executor de processo. Injetável: nos testes nada roda de verdade. */

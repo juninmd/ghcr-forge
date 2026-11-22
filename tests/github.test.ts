@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, test } from "bun:test";
-import { cloneUrl, parsePushEvent, tagForSha, verifySignature } from "../src/github.ts";
+import { cloneUrl, gitAuthEnv, parsePushEvent, tagForSha, verifySignature } from "../src/github.ts";
 import { redact } from "../src/runner.ts";
 
 const sign = (body: string, secret: string) =>
@@ -73,15 +73,15 @@ describe("tagForSha", () => {
 });
 
 describe("credenciais", () => {
-  test("cloneUrl embute o token", () => {
-    expect(cloneUrl("juninmd/app", "ghp_secreto12345")).toContain("ghp_secreto12345");
+  test("cloneUrl não carrega credencial (ela ficaria no .git/config e no argv)", () => {
+    expect(cloneUrl("juninmd/app")).toBe("https://github.com/juninmd/app.git");
   });
 
-  test("redact apaga o token da URL de clone", () => {
-    const url = cloneUrl("juninmd/app", "ghp_secreto12345");
-    const clean = redact(`git clone ${url}`, ["ghp_secreto12345"]);
-    expect(clean).not.toContain("ghp_secreto12345");
-    expect(clean).toContain("juninmd/app");
+  test("gitAuthEnv leva o token em header pelo env, não na URL", () => {
+    const env = gitAuthEnv("ghp_secreto12345");
+    expect(env.GIT_CONFIG_KEY_0).toBe("http.https://github.com/.extraheader");
+    const basic = env.GIT_CONFIG_VALUE_0?.replace("AUTHORIZATION: basic ", "") ?? "";
+    expect(Buffer.from(basic, "base64").toString()).toBe("x-access-token:ghp_secreto12345");
   });
 
   test("redact apaga token mesmo sem lista de segredos", () => {

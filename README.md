@@ -117,7 +117,10 @@ caracteres): ele vai para `git checkout`, então nada que pareça opção ou ref
 - **A allowlist é o `repos.json`**, não a assinatura: segredo vazado não vira build arbitrário.
 - **Toda saída de comando passa por `redact()`** antes de ir para o log em disco: token da URL
   de clone, `--password`, `ghp_*` e campos `token:`/`api_key:` saem mascarados. Coberto por teste.
-- **A URL do remote é regravada a cada build**: token rotacionado não deixa o clone preso no antigo.
+- **Token fora da linha de comando e do disco**: `docker login --password-stdin` e, no git, header
+  `http.extraheader` passado por `GIT_CONFIG_*` no env. O argv (visível em `ps` para qualquer
+  usuário) e o `.git/config` dos workspaces nunca têm o token; a URL do remote é regravada sem
+  credencial a cada build, o que também limpa configs antigos.
 - **`GIT_TERMINAL_PROMPT=0`**: credencial errada falha rápido em vez de travar esperando input.
 - **Dashboard não expõe log nem dispara build** — as duas coisas exigem o token.
 - Job preso em `running` por queda do processo é marcado como falho no boot: a fila não trava.
@@ -143,9 +146,9 @@ assinatura válida → job enfileirado, repetição → dedupe, `/api` sem token
 O forge já se construiu (dogfooding). `POST /api/build {"repo":"ghcr-forge"}`, 26s:
 
 ```
-$ docker login ghcr.io -u juninmd --password ***
+$ docker login ghcr.io -u juninmd --password-stdin
 $ git clone https://github.com/juninmd/ghcr-forge.git data/work/ghcr-forge
-$ git remote set-url origin ***
+$ git remote set-url origin https://github.com/juninmd/ghcr-forge.git
 $ git checkout --force origin/main
 $ git rev-parse HEAD
 # juninmd/ghcr-forge@dff84df59e8b -> ghcr.io/juninmd/ghcr-forge:sha-dff84df59e8b

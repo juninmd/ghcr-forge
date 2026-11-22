@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { type BuildIO, runBuild } from "../src/build.ts";
+import { type BuildIO, registryLogin, runBuild } from "../src/build.ts";
 import { loadConfig } from "../src/config.ts";
 import type { Job, RepoConfig, RunResult } from "../src/types.ts";
 
@@ -145,6 +145,14 @@ describe("runBuild", () => {
     expect(h.logs.some((l) => l.includes("git clone https://github.com/juninmd/app.git"))).toBe(true);
   });
 
+  test("o token nunca vai na linha de comando (ps mostra o argv a qualquer usuário)", async () => {
+    const h = harness({ files: { "app/values.yaml": VALUES } });
+    const chart = { repo: "juninmd/charts", path: "app/values.yaml", key: "image.tag" };
+    await runBuild({ ...repo, chart }, job, config, h.io);
+    expect(joined(h.cmds).some((c) => c.startsWith("git push"))).toBe(true);
+    expect(joined(h.cmds).some((c) => c.includes(config.githubToken))).toBe(false);
+  });
+
   test("saída de erro do docker também passa pelo redator", async () => {
     const h = harness({
       fail: (cmd) =>
@@ -197,5 +205,21 @@ describe("bump de chart", () => {
     const h = harness({ files: { "charts/app/values.yaml": VALUES } });
     const broken = { ...withChart, chart: { ...withChart.chart!, key: "image.digest" } };
     await expect(runBuild(broken, job, config, h.io)).rejects.toThrow("não encontrada");
+  });
+});
+
+describe("registryLogin", () => {
+  test("manda a senha pelo stdin, nunca no argv", async () => {
+    const calls: { cmd: string[]; stdin?: string }[] = [];
+    const io = {
+      runner: async (cmd: string[], opts?: { stdin?: string }) => {
+        calls.push({ cmd, stdin: opts?.stdin });
+        return { code: 0, stdout: "", stderr: "" };
+      },
+      log: () => {},
+    } as unknown as BuildIO;
+    await registryLogin(config, io);
+    expect(calls[0]?.cmd).toEqual(["docker", "login", "ghcr.io", "-u", "juninmd", "--password-stdin"]);
+    expect(calls[0]?.stdin).toBe(config.githubToken);
   });
 });
