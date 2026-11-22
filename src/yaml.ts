@@ -47,14 +47,35 @@ function findKey(lines: string[], path: string[]): { index: number; match: RegEx
   return null;
 }
 
+/**
+ * Separa o valor do comentário no fim da linha. `#` só abre comentário fora de
+ * aspas e depois de espaço: `"x #y"` é um valor, não `"x` + comentário.
+ */
+function splitComment(rest: string): { value: string; comment: string } {
+  let quote: string | null = null;
+  for (let i = 0; i < rest.length; i++) {
+    const c = rest[i];
+    if (quote) {
+      if (c === "\\" && quote === '"') i++;
+      else if (c === quote) quote = null;
+    } else if (c === '"' || c === "'") {
+      quote = c;
+    } else if (c === "#" && i > 0 && /\s/.test(rest[i - 1] ?? "")) {
+      const start = rest.slice(0, i).search(/\s+$/);
+      return { value: rest.slice(0, start), comment: rest.slice(start) };
+    }
+  }
+  return { value: rest, comment: "" };
+}
+
 export function setYamlValue(yaml: string, path: string[], value: string): string {
   if (!path.length) throw new Error("caminho vazio");
   const lines = yaml.split("\n");
   const found = findKey(lines, path);
   if (!found) throw new Error(`chave "${path.join(".")}" não encontrada no values.yaml`);
   const { index, match: m } = found;
-  const trailing = /(\s+#.*)$/.exec(m[3] ?? "")?.[1] ?? "";
-  lines[index] = `${m[1]}${m[2]}: ${quoteScalar(value)}${trailing}`;
+  const { comment } = splitComment(m[3] ?? "");
+  lines[index] = `${m[1]}${m[2]}: ${quoteScalar(value)}${comment}`;
   return lines.join("\n");
 }
 
@@ -63,6 +84,6 @@ export function getYamlValue(yaml: string, path: string[]): string | null {
   if (!path.length) return null;
   const found = findKey(yaml.split("\n"), path);
   if (!found) return null;
-  const raw = (found.match[3] ?? "").replace(/\s+#.*$/, "").trim();
+  const raw = splitComment(found.match[3] ?? "").value.trim();
   return raw.replace(/^["']|["']$/g, "");
 }

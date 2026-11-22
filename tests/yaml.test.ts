@@ -121,3 +121,23 @@ test("no nível raiz, chave aninhada em outro bloco não casa", () => {
   expect(getYamlValue(yaml, ["image", "tag"])).toBe("root");
   expect(setYamlValue(yaml, ["image", "tag"], "new")).toBe('backend:\n  image:\n    tag: "b"\nimage:\n  tag: "new"\n');
 });
+
+describe("comentário vs. # dentro de aspas", () => {
+  const QUOTED = `backend:\n  tag: "x #y"   # gerenciado\n  other: 'a #b'\n`;
+
+  test("setYamlValue não deixa aspa solta quando o valor antigo tem ' #'", () => {
+    const out = setYamlValue(QUOTED, ["backend", "tag"], "sha-1");
+    expect(out.split("\n")[1]).toBe(`  tag: "sha-1"   # gerenciado`);
+  });
+
+  test("getYamlValue lê o valor inteiro entre aspas", () => {
+    expect(getYamlValue(QUOTED, ["backend", "tag"])).toBe("x #y");
+    expect(getYamlValue(QUOTED, ["backend", "other"])).toBe("a #b");
+  });
+
+  test("sem aspas, ' #' continua começando comentário", () => {
+    const y = `backend:\n  tag: sha-0 # c\n`;
+    expect(getYamlValue(y, ["backend", "tag"])).toBe("sha-0");
+    expect(setYamlValue(y, ["backend", "tag"], "sha-1")).toBe(`backend:\n  tag: "sha-1" # c\n`);
+  });
+});
