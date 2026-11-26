@@ -56,6 +56,21 @@ const hook = (body: string, secret = SECRET) =>
   });
 
 describe("POST /hooks/github", () => {
+  test("corpo acima de 1 MiB é recusado com 413 antes de verificar a assinatura", async () => {
+    const big = push({ head_commit: { message: "x".repeat(1024 * 1024 + 10) } });
+    const { server } = app();
+    const res = await server.fetch(hook(big));
+    expect(res.status).toBe(413);
+  });
+
+  test("sem header de assinatura a resposta é 401 sem ler o corpo", async () => {
+    const { server } = app();
+    const res = await server.fetch(
+      new Request("http://x/hooks/github", { method: "POST", headers: { "x-github-event": "push" }, body: push() }),
+    );
+    expect(res.status).toBe(401);
+  });
+
   test("push assinado enfileira o build", async () => {
     const { server, queue } = app();
     const res = await server.request(hook(push()));

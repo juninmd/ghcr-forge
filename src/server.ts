@@ -3,6 +3,9 @@ import { COMMIT_SHA, parsePushEvent, safeEqual, verifySignature } from "./github
 import { dashboard } from "./dashboard.ts";
 import type { Config, JobQueue, RepoConfig } from "./types.ts";
 
+/** Push do GitHub cabe folgado; corpo maior é ataque de memória, não evento. */
+const WEBHOOK_MAX_BYTES = 1024 * 1024;
+
 export interface ServerDeps {
   config: Config;
   queue: JobQueue;
@@ -21,8 +24,21 @@ export function createServer(deps: ServerDeps): Hono {
 
   // ---- webhook do GitHub -------------------------------------------------
   app.post("/hooks/github", async (c) => {
+    // Rota pública: recusa antes de carregar o corpo na memória (sem assinatura ou acima do limite).
+    const signature = c.req.header("x-hub-signature-256") ?? null;
+    if (!signature) return c.json({ error: "assinatura inválida" }, 401);
+    const declared = Number(c.req.header("content-length") ?? 0);
+    if (declared > WEBHOOK_MAX_BYTES) {
+      log("[hook] corpo acima do limite — recusado");
+      return c.json({ error: "payload grande demais" }, 413);
+    }
+
     const body = await c.req.text();
-    if (!verifySignature(body, c.req.header("x-hub-signature-256") ?? null, config.webhookSecret)) {
+    if (new TextEncoder().encode(body).length > WEBHOOK_MAX_BYTES) {
+      log("[hook] corpo acima do limite — recusado");
+      return c.json({ error: "payload grande demais" }, 413);
+    }
+    if (!verifySignature(body, signature, config.webhookSecret)) {
       log("[hook] assinatura inválida — recusado");
       return c.json({ error: "assinatura inválida" }, 401);
     }
